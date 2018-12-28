@@ -1,3 +1,9 @@
+live-usb-maker (0.3.4) unstable; urgency=medium
+
+  * Fix bug in fatal error message "The live media is not mounted" 
+
+ -- anticapitalista <antix@operamail.com>  Fri, 28 Dec 2018 20:28:48 +0200
+
 live-usb-maker (0.3.3) unstable; urgency=medium
 
   * added wamerican and dict to depends
