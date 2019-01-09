@@ -4,12 +4,12 @@
 # live-usb-maker
 # A fast and robust program to make full featured antiX/MX live-usbs
 #
-# (C) 2016 -- 2017 Paul Banham <antiX@operamail.com>
+# (C) 2016 -- 2018 Paul Banham <antiX@operamail.com>
 # License: GPLv3 or later
 #==============================================================================
 
-      VERSION="2.12.13"
- VERSION_DATE="Thu Dec 21 16:00:55 MST 2017"
+      VERSION="2.20.00"
+ VERSION_DATE="Thu Jan  3 14:05:37 MST 2019"
 
         ME=${0##*/}
     MY_DIR=$(dirname "$(readlink -f $0)")
@@ -97,11 +97,11 @@ BACKUP_WORDS_FILE="/usr/share/dict/words"
 
     EXT4_NO_64BIT="-O ^64bit"
 
-ORDERED_CMDS="partition-clear partition-make makefs-main makefs-bios makefs-uefi copy-main copy-bios copy-uefi"
+ORDERED_CMDS="partition-clear partition-make makefs-main makefs-bios makefs-uefi copy-main defrag copy-bios copy-uefi"
 ORDERED_CMDS="$ORDERED_CMDS uuids cheats cheats-syslinux cheats-grub install encrypt-main encryption-initrd"
     ALL_CMDS="sizes all partition makefs copy cheats $ORDERED_CMDS"
 
-   ALL_FORCE="automount,flock,makefs,ultra-fit,usb"
+   ALL_FORCE="automount,flock,makefs,ultra-fit,usb,nofuse"
    ALL_PAUSE="exit,initrd,copy"
 
     LIB_PATH="$MY_LIB_DIR:$LIB_DIR"
@@ -153,6 +153,7 @@ Options:
                            Use "on" or "yes"  to show cheat menus without asking
                         Otherwise you will be asked.
   -C --color=<xxx>      Set color scheme to off|low|low2|bw|dark|high
+  -d --defrag-all       Defragment all files on the main partitions using e4defrag
   -E --encrypt          Set up to boot from an encrypted partition
   --encrypt=<flag>      Phasephrase option:
                            ask         Enter the passphrase via the keyboard
@@ -174,7 +175,7 @@ Options:
                          ultra-fit: don't warn about SanDisk utra-fit devices
                             makefs: Make the ext4 filesystem even if one exists
                          automount: temporarily disable antiX automounting
-                               all: All of the above (dangerous!)
+                            nofuse: don't use fuseiso to mount iso files
 
   -- --gui-progress     All remaining args are used as a gui progress bar program
                         Example: --gui-progress yad --progress --auto-close
@@ -247,6 +248,7 @@ eval_argument() {
              -cheat=*)  CHEATS="$CHEATS${CHEATS:+ }$val" ;;
              -color|C)  COLOR_SCHEME=$val                ;;
              -color=*)  COLOR_SCHEME=$val                ;;
+        -defrag-all|d)  DEFRAG_ALL=true                  ;;
            -encrypt|E)  ENCRYPT=true                     ;;
            -encrypt=*)  ENCRYPT=true
                         PASS_PHRASE_TYPE=$val            ;;
@@ -334,7 +336,7 @@ takes_param() {
 # The main routine.  Called from the very bottom of this script.
 #------------------------------------------------------------------------------
 main() {
-    local SHIFT SHIFT_2 SHORT_STACK="bcCDeEfFgGhIkLmnNpPqRsStuvVW"
+    local SHIFT SHIFT_2 SHORT_STACK="bcCdDeEfFgGhIkLmnNpPqRsStuvVW"
     local BE_VERBOSE FROM TARGET FATAL_QUESTION CMD PARAM_CNT ENCRYPT
     local VERY_VERBOSE VERBOSITY=0
     local ISO_BOOT_DIR  START_T=0
@@ -460,9 +462,10 @@ main() {
         # FIXME: should use initrd.out to get the uuid, etc
         live_dev=$(get_live_dev)
         if [ -n "$live_dev" ]; then
-            shout "Found live media device %s" "$(pqb /dev/$(get_drive $live_dev))"
+            shout $"Found live media device %s" "$(pqb /dev/$(get_drive $live_dev))"
         else
-            fatal "The live media is not mounted"
+            # Don't error out on systems running toram, just inform
+            msg $"The live media is not mounted"
         fi
     fi
 
@@ -772,6 +775,8 @@ main() {
         do_made_by $BIOS_DIR "$MADE_BY_FILE"
         write_random_seed $MAIN_DIR/$DEF_BOOT_DIR/$SEED_FNAME
     fi
+
+    need defrag && do_defrag "$MAIN_DIR" "$DEFRAG_ALL"
 
     # if need_q copy-bios || need_q copy-main; then
     #     : ${ISO_BOOT_DIR:=$DEF_BOOT_DIR}
