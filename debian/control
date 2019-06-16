@@ -4,9 +4,9 @@ Priority: required
 Maintainer: anticapitalista <antiX@operamail.com>
 Build-Depends: debhelper (>= 9.20120115)
 Standards-Version: 3.9.8
-Homepage: https://github.com/antiX-Linux/live-usb-maker
+Homepage: https://gitlab.com/antiX-Linux/live-usb-maker
 
 Package: live-usb-maker
 Architecture: all
-Depends: cli-shell-utils, extlinux, syslinux-common, parted, cli-shell-utils, wamerican, dict
+Depends: cli-shell-utils, extlinux, syslinux-common, parted, xorriso, wamerican, dict
 Description: Create an antiX/MX LiveUSB.         

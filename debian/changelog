@@ -1,3 +1,53 @@
+live-usb-maker (0.3.14) unstable; urgency=medium
+
+  * remove unneeded data-first-lum
+
+ -- anticapitalista <antix@operamail.com>  Sun, 16 Jun 2019 10:59:35 +0300
+
+live-usb-maker (0.3.13) unstable; urgency=medium
+
+  * Bump version to 2.41.00
+
+ -- anticapitalista <antix@operamail.com>  Thu, 06 Jun 2019 18:42:39 +0300
+
+live-usb-maker (0.3.12) unstable; urgency=medium
+
+  * Bump live-usb-maker version to 2.40.21
+
+ -- anticapitalista <antix@operamail.com>  Sun, 02 Jun 2019 14:47:40 +0300
+
+live-usb-maker (0.3.11) unstable; urgency=medium
+
+  * fix nasty bug in the --initrd feature
+
+ -- anticapitalista <antix@operamail.com>  Fri, 31 May 2019 01:15:11 +0300
+
+live-usb-maker (0.3.10) unstable; urgency=medium
+
+  * Bump version to 2.40.19
+
+ -- anticapitalista <antix@operamail.com>  Thu, 09 May 2019 15:16:50 +0300
+
+live-usb-maker (0.3.9) unstable; urgency=medium
+
+  * added data-first feature to start live-usb with a data partition, usually fat32 or ntfs
+  * add --format option to format a usb-stick for data
+  * add/change --initrd option to update the initrd on a live usb.  It can point to a .gz file or a directory
+
+ -- anticapitalista <antix@operamail.com>  Mon, 08 Apr 2019 16:20:05 +0300
+
+live-usb-maker (0.3.8) unstable; urgency=medium
+
+  * further fuseiso fixes
+
+ -- anticapitalista <antix@operamail.com>  Fri, 29 Mar 2019 16:40:30 +0200
+
+live-usb-maker (0.3.7) unstable; urgency=medium
+
+  * fuseiso fixes
+
+ -- anticapitalista <antix@operamail.com>  Sun, 24 Mar 2019 22:10:53 +0200
+
 live-usb-maker (0.3.6) unstable; urgency=medium
 
   * upstream changes to fix/improve dd-live-usb
