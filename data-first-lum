@@ -8,8 +8,8 @@
 # License: GPLv3 or later
 #==============================================================================
 
-      VERSION="2.41.00"
- VERSION_DATE="Thu 06 Jun 2019 12:34:57 AM MDT"
+      VERSION="2.40.10"
+ VERSION_DATE="Fri Apr  5 20:08:35 MDT 2019"
 
         ME=${0##*/}
     MY_DIR=$(dirname "$(readlink -f $0)")
@@ -76,7 +76,6 @@ EXT_OVERHEAD_FORM="* 26 / 10000 - 2"
 
   GRAPHICAL_MENUS="true"
   AUTOMOUNT_DELAY="2"
-  INITRD_MAX_SIZE="200"
 #== END_CONFIG
 
      MAIN_FS_TYPE="ext4"
@@ -92,7 +91,7 @@ BACKUP_WORDS_FILE="/usr/share/dict/words"
 
          WORK_DIR="/run/$ME"
         SHELL_LIB="cli-shell-utils.bash"
-      CONFIG_FILE="/etc/$ME/$ME.conf"
+      CONFIG_FILE="/root/.config/$ME/$ME.conf"
      THE_LOG_FILE="/var/log/$ME.log"
      THE_ERR_FILE="/var/log/$ME.error"
     THE_PROG_FILE="/var/log/$ME.progress"
@@ -202,7 +201,6 @@ Options:
      --gpt-pmbr               Set pmbr_boot disk flag (prevents booting via UEFI)
   -h --help                   Show this usage
   -i --initrd=<file>          Update the initrd from using a template-initrd.gz
-  -i --initrd=<dir>           Use a directory tree as a template
   -I --ignore-config          Ignore the configuration file
   -k --keep-syslinux          Don't replace the syslinux files
   -L --label=Name             Label ext partition with Name
@@ -279,10 +277,10 @@ eval_argument() {
          -ext-options)  EXT4_OPTIONS=$val                ;;
        -ext-options=*)  EXT4_OPTIONS=$val                ;;
           -esp-size=*)  UEFI_SIZE=$val                   ;;
-          -data-first)  DATA_FIRST=choose                ;;
+          -data-first)  DATA_FIRST=fat32                 ;;
         -data-first=*)  DATA_FIRST=$val                  ;;
-              -format)  FORMAT_USB=choose                ;;
-            -format=*)  FORMAT_USB=$val                  ;;
+              -format)  FORMAT_USB=true                  ;;
+            -format=*)  FORMAT_USB=true; USB_FORMAT=$val ;;
               -from|f)  FROM=$val                        ;;
               -from=*)  FROM=$val                        ;;
        --graphic-ui|G)  GRAPHICAL_MENUS=true             ;;
@@ -325,7 +323,7 @@ eval_argument() {
       -reset-config|R)                                   ;;
       -write-config|W)                                   ;;
 
-               *)  fatal $"Unknown parameter %s" "-$arg"  ;;
+               *)  fatal "Unknown parameter %s" "-$arg"  ;;
     esac
 }
 
@@ -370,7 +368,7 @@ main() {
     local BE_VERBOSE FROM TARGET FATAL_QUESTION CMD PARAM_CNT ENCRYPT
     local CLONE_PERSIST  NO_CLONE_PERSIST CLONE_HOME  NO_CLONE_HOME
     local CLONE_ROOT  NO_CLONE_ROOT  NO_PROGRESS_BAR  TOTAL_SIZE
-    local FORMAT_USB USING_GRUB_CONFIG_2  CRYPT_PART
+    local FORMAT_USB USB_FORMAT USING_GRUB_CONFIG_2
     local VERY_VERBOSE VERBOSITY=0
     local ISO_BOOT_DIR  START_T=0
 
@@ -381,7 +379,7 @@ main() {
     # Let non-root users get usage.  Need to get --ignore-config early.
     read_early_params "$@"
 
-    force fuse && force nofuse && fatal $"Cannot force both %s and %s" "$(pqw fuse)" "$(pqw nofuse)"
+    force fuse && force nofuse && fatal "Cannot force both %s and %s" "$(pqw fuse)" "$(pqw nofuse)"
     need_root
     EXIT_NUM=100
 
@@ -393,7 +391,7 @@ main() {
     # Force stored 'gpt' value back to msdos.  Can still be overridden by the
     # --gpt command line parameter
     if [ -z "$CMD_GPT" -a "$MSDOS_GPT" != 'msdos' ]; then
-        warn $"Forcing partitioning to be %s" "$(pqh msdos)"
+        warn "Forcing partitioning to be %s" "$(pqh msdos)"
         MSDOS_GPT=msdos
         write_config "$CONFIG_FILE"
     fi
@@ -412,12 +410,11 @@ main() {
     validate_clone_persist "$CLONE_PERSIST" "$NO_CLONE_PERSIST"
 
     # Simple sanity check
-    :
-    [ -n "$FORMAT_USB"  -a -n "$CMD_CMDS"    ] && fatal $"Cannot combine %s with any commands"  "--format"
-    [ -n "$INITRD_FILE" -a -n "$CMD_CMDS"    ] && fatal $"Cannot combine %s with any commands"  "--initrd"
-    [ -n "$FORMAT_USB"  -a -n "$INITRD_FILE" ] && fatal $"Cannot combine %s with %s" "--format" "--initrd"
+    [ -n "$FORMAT_USB"  -a -n "$CMD_CMDS"    ] && fatal "Cannot combine %s with any commands"  "--format"
+    [ -n "$INITRD_FILE" -a -n "$CMD_CMDS"    ] && fatal "Cannot combine %s with any commands"  "--initrd"
+    [ -n "$FORMAT_USB"  -a -n "$INITRD_FILE" ] && fatal "Cannot combine %s with %s" "--format" "--initrd"
 
-    #validate_fs_type "$USB_FORMAT"
+    validate_fs_type "$USB_FORMAT"
 
     case $VERBOSITY in
         0) ;;
@@ -442,15 +439,15 @@ main() {
     elif [ "$INITRD_FILE" ]; then
         CMDS='update-initrd'
         CMD_CMDS="$CMDS"
-        test -e "$INITRD_FILE" || fatal $"Could not find initrd file %s" "$(pqw $INITRD_FILE)"
-        test -r "$INITRD_FILE" || fatal $"Could not read initrd file %s" "$(pqw $INITRD_FILE)"
+        test -e "$INITRD_FILE" || fatal "Could not find initrd file %s" "$(pqw $INITRD_FILE)"
+        test -r "$INITRD_FILE" || fatal "Could not read initrd file %s" "$(pqw $INITRD_FILE)"
     fi
 
     local percent_size=${CMD_SIZE%%%}
     case $percent_size in
         "") ;;
         [1-9]|[0-9][0-9]|100) ;;
-        *) fatal $"Wrong percentage value %s.  Should be between %s and %s inclusive." "$(pqh $percent_size)" "1%" "100%"
+        *) fatal "Wrong percentage value '%s'.  Should be between %s and %s inclusive." "$(pqh $percent_size)" "1%" "100%"
     esac
 
     [ -z "${UEFI_SIZE##[0-9]}" ] && fatal "esp-size must be larger than %s" 9
@@ -524,6 +521,7 @@ main() {
         if [ -n "$live_dev" ]; then
             shout $"Found live media device %s" "$(pqb /dev/$(get_drive $live_dev))"
         else
+            # Don't error out on systems running toram, just inform
             msg $"The live media is not mounted"
         fi
     fi
@@ -546,27 +544,15 @@ main() {
     local target_dev=$(expand_device $TARGET)
 
     # Make sure our target is a real device
-    :
     [ ${#target_dev} -gt 0 ] || fatal $"Could not find device %s" "$TARGET"
 
     TOTAL_SIZE=$(get_total_size "$target_dev")
-    fatal_z "$TOTAL_SIZE" $"Could not get total size of device %s" "$target_dev"
 
-    if [ ${#CMD_CMDS} -eq 0  ] && ! q_mode simple gui; then
-
-        data_first && msg $"Will create a leading data partition"
-        encrypt    && msg $"Will create an encrypted live-usb"
-        select_overall_mode CMDS QUESTION_MODE
-    fi
+    [ ${#CMD_CMDS} -eq 0  ] && ! q_mode simple gui && select_overall_mode CMDS QUESTION_MODE
 
     if need_q copy && ! encrypt; then
         expert_yes_NO $"Create an encrypted live-usb?" && ENCRYPT=true
     fi
-
-    if need_q copy && ! data_first; then
-        expert_yes_NO $"Create a leading data partition on the live-usb?" && DATA_FIRST_FS=choose
-    fi
-
 
     # FIXME: better error messsage!!
     encrypt && need_prog copy-initrd-programs unpack-initrd cryptsetup dmsetup
@@ -590,15 +576,7 @@ main() {
 
         clone)
             #
-            if test -e /live/config/toram-all; then
-                from=clone=$TORAM_MP
-            else
-                from=clone=$LIVE_MP
-
-            fi;;
-
-        clone-toram)
-            from=clone=$TORAM_MP ;;
+            from=clone=$LIVE_MP ;;
 
         dev=*|clone=*|file=*)   ;;
         null=*)                 ;;
@@ -637,7 +615,7 @@ main() {
             # Just clone the directory instead if the device is already mounted
             if is_mounted "$from_dev"; then
                 from_value=$(grep "^$from_dev " /proc/mounts | cut -d" " -f2 | head -n1)
-                msg $"Will try cloning directory %s" "$(pq "$from_value")"
+                msg "Will try cloning directory %s" "$(pq "$from_value")"
                 from_dev=
             fi
 
@@ -653,7 +631,7 @@ main() {
                 from_thing=$"directory"
 
             else
-                fatal $"Can only clone devices and directories, not %s" "$from_value"
+                fatal "Can only clone devices and directories, not '%s" "$from_value"
             fi
             ;;
 
@@ -668,10 +646,10 @@ main() {
     show_distro_version "$ISO_DIR" # "$from_value"
 
     if test -e $ISO_DIR/$EFI_GRUB_CONF; then
-        msg $"Found grub config %s"  "$(pq 2.0)"
+        msg "Found grub config %s"  "$(pq 2.0)"
         USING_GRUB_CONFIG_2=true
     elif test -e $ISO_DIR/$GRUB_CONF; then
-        msg $"Found grub config %s"  "$(pq 1.0)"
+        msg "Found grub config %s"  "$(pq 1.0)"
     fi
 
     local distro_name=$(get_distro_name "$ISO_DIR/version")
@@ -691,24 +669,22 @@ main() {
     fi
 
     # These are mostly for a manually entered target
-    :
-    test -e $target_dev || fatal $"Target device %s does not exist" $target_dev
-    test -b $target_dev || fatal $"Target device %s is not a block device" $target_dev
+    test -e $target_dev || fatal "Target device %s does not exist" $target_dev
+    test -b $target_dev || fatal "Target device %s is not a block device" $target_dev
 
     # Require that an entire disk device be specified (could relax?)
     local dev_type=$(lsblk -no type --nodeps $target_dev)
-    [ "$dev_type" = 'disk' ] || fatal $"Device %s is not a disk device" $target_dev
+    [ "$dev_type" = 'disk' ] || fatal "Device %s is not a disk device" $target_dev
 
     setup_devices $target_dev
 
     # fatal "The device %s does not seem to be usb or removable."
     # FIXME: move this to the lib?
-    :
     force usb || is_usb_or_removable $target_dev \
         || yes_NO_fatal "usb" \
-        $"Do you want to use it anyway (dangerous)?" \
-        $"Use %s to always ignore this warning"      \
-        $"The device %s does not seem to be usb or removeable."  "$target_dev"
+        "Do you want to use it anyway (dangerous)?" \
+        "Use %s to always ignore this warning"      \
+        "The device %s does not seem to be usb or removeable."  "$target_dev"
 
     local bios_size  main_size  uefi_size
 
@@ -716,7 +692,7 @@ main() {
     need_q partition-make && verify_sizes bios_size main_size uefi_size "$target_dev" \
         "$ISO_DIR" "$percent_size" "$BIOS_SIZE" "$UEFI_SIZE" "${DEFAULT_SIZE%%%}"
 
-    [ ${#cheats} -gt 0 ] && msg "Cheats %s" "$(pq $cheats)"
+    [ ${#cheats} -gt 0 ] && msg "Cheats: %s" "$(pq $cheats)"
     # Bail early if only size info is requested
     given_cmd sizes && my_exit 0
 
@@ -729,7 +705,7 @@ main() {
     encrypt && echo
     if encrypt && need encryption-initrd; then
         encrypted_lab="$(bqq $"encrypted") "
-        msg $"Checking to see if the live media will support encryption ..."
+        msg "Checking to see if the live media will support encryption ..."
         # Need to get programs, libs, and modules, out of the linuxfs file (sigh)
         local linuxfs_full=$ISO_DIR/$DEF_BOOT_DIR/$LINUXFS_NAME
         my_mount "$linuxfs_full" "$LINUX_DIR" -t squashfs -o loop,ro
@@ -748,15 +724,11 @@ main() {
 
     # FIXME: add sanity checks for "uuids" and for update-initrd
     if [ -n "$FORMAT_USB" ]; then
-        makefs_select FORMAT_USB $"data usb-stick"
-        msg $"Will create a %s filesystem" "$(pq $FORMAT_USB)"
-    elif [ -d "$INITRD_FILE" ]; then
-        msg $"Will update the initrd from directory %s" "$(pq $INITRD_FILE)"
-    elif [ -f "$INITRD_FILE" ]; then
-        msg $"Will update the initrd from file %s" "$(pq $INITRD_FILE)"
-    elif data_first; then
-        makefs_select DATA_FIRST_FS $"data partition"
-        msg $"Will create a leading %s data partition" "$(pq $DATA_FIRST_FS)"
+        q_mode gui && : ${USB_FORMAT:=vfat}
+        makefs_select USB_FORMAT
+        msg "Will create a %s filesystem" "$(pq $USB_FORMAT)"
+    elif [ -n "$INITRD_FILE" ]; then
+        msg "Will update the initrd from file %s" "$(pq $INITRD_FILE)"
     fi
 
     #=========================================================================
@@ -777,17 +749,21 @@ main() {
     else
         echo
         shout_subtitle "$final_q"
+        #final_q=$(printf "%s\n%s" "$final_q" "$(quest $"Shall we begin?")")
         YES_no_pretend $"Shall we begin?" || my_exit
     fi
 
     [ -n "$BE_VERBOSE" -a -n "$PRETEND_MODE" ] && VERY_VERBOSE=true
+
+    # Add last lines of dmesg output to log file on fatal errors
+    ADD_DMESG_TO_FATAL=true
 
     force automount || suspend_automount
 
     START_T=$(date +%s)
 
     if [ "$FORMAT_USB" ]; then
-        format_usb "$target_dev" "$MSDOS_GPT"  "$FORMAT_USB"
+        format_usb "$target_dev" "$MSDOS_GPT"  "$USB_FORMAT"
         say_done
         my_exit 0
     fi
@@ -841,6 +817,10 @@ main() {
         esac
 
         encrypt_partition $MAIN_DEV "$LUKS_NAME" "$phrase"
+        if [ "$DATA_FIRST" ]; then
+            need makefs-data && do_makefs_ext
+        fi
+
         need makefs-main && do_makefs_ext "$LUKS_DEV" "$EXT4_OPTIONS" "$BIOS_LABEL"
 
         local main_uuid=$(lsblk --nodeps -no uuid $MAIN_DEV)
@@ -855,38 +835,25 @@ main() {
     fi
     #=========================================================================
 
-    if [ -z "$DID_PARTITION" ]; then
-        guess_partitioning $target_dev
+    [ -z "$DID_PARTITION" ] && guess_partitioning $target_dev
 
-        if encrypt; then
-            remount_encrypted "$CRYPT_PART" "$LUKS_NAME"
-            my_mount "$LUKS_DEV" "$MAIN_DIR"
-        fi
+    sync; sync
 
-        my_mount $BIOS_DEV $BIOS_DIR  -t $MAIN_FS_TYPE
-        my_mount $UEFI_DEV $UEFI_DIR  -t $UEFI_FS_TYPE
-    else
+    # Tell OS partitioning has changed (after we've created the new file systems)
+    cmd partprobe $target_dev
 
-        sync; sync
-
-        # Tell OS partitioning has changed (after we've created the new file systems)
-        cmd partprobe $target_dev
-
-        my_mount $BIOS_DEV $BIOS_DIR  -t $MAIN_FS_TYPE
-        my_mount $UEFI_DEV $UEFI_DIR  -t $UEFI_FS_TYPE
-    fi
-
+    my_mount $BIOS_DEV $BIOS_DIR  -t $MAIN_FS_TYPE
+    my_mount $UEFI_DEV $UEFI_DIR  -t $UEFI_FS_TYPE
     data_first && my_mount $DATA_DEV $DATA_DIR -t $DATA_FIRST_FS
 
     local mp_list="$BIOS_DIR $UEFI_DIR"
-
-    encrypt    && mp_list="$BIOS_DIR $MAIN_DIR $UEFI_DIR"
+    encrypt   && mp_list="$BIOS_DIR $MAIN_DIR $UEFI_DIR"
     data_first && mp_list="$DATA_DIR $mp_list"
 
     display_df_output $mp_list
 
     if [ "$INITRD_FILE" ]; then
-        update_initrd  "$BIOS_DIR" "$MAIN_DIR"  "$INITRD_FILE"
+        update_initrd  "$MAIN_DIR"  "$INITRD_FILE"
         say_done
         my_exit 0
     fi
@@ -934,7 +901,7 @@ main() {
     encrypt && main_dir=$MAIN_DIR
     if need uuids; then
         do_uuids "$BIOS_DIR" "$bios_uuid" "$UEFI_DIR/$GRUB_CONF" "$uefi_uuid" "$UEFI_PART" "$main_dir"
-        data_first_uuid "$BIOS_DIR" "$DATA_DEV"  "$main_dir"
+        data_first_uuid "$BIOS_DIR" "$DATA_DEV"
     fi
 
     [ ${#cheats} -gt 0 ] && need cheats-syslinux && do_cheats_syslinux $BIOS_DIR "$cheats"
@@ -977,7 +944,7 @@ check_from() {
         eval "$var=clone=\$cmd_from"
         return 0
     else
-        fatal $"The %s parameter %s was not recognized" "--from" "$cmd_from"
+        fatal "The --from parameter '%s' was not recognized" "$cmd_from"
     fi
 }
 
@@ -1021,8 +988,8 @@ select_passphrase_type() {
 
         local i  len=4  max_len=8  seq=
         if [ "$have_words" ]; then
-            shout $"Please wait while some random passphrases are generated"
-            msg $"Dictionary size is %s words (%s bits/word)" \
+            shout "Please wait while some random passphrases are generated"
+            msg "Dictionary size is %s words (%s bits/word)" \
                 "$(nq $(add_commas $dict_size))" "$(nq $dict_bits)" | color_commas
             seq=$(seq 2 6)
         fi
@@ -1037,18 +1004,18 @@ select_passphrase_type() {
         done
 
         local menu=$(
-            menu_printf ask         $"Enter your own passphrase"
-            menu_printf first-boot  $"Set passphrase on first boot of live-usb"
+            menu_printf ask         "Enter your own passphrase"
+            menu_printf first-boot  "Set passphrase on first boot of live-usb"
             for i in $seq; do
                 eval phrase=\$phrase_$i
                 eval bits=\$bits_$i
                 menu_printf "index=$i" "%s (%s bits)" "$(bq "$phrase")" "$(nq $bits)"
             done
-            [ "$have_words" ] && menu_printf more $"See more passphrases"
+            [ "$have_words" ] && menu_printf more "See more passphrases"
         )
 
         local ans
-        my_select ans $"Please select a passphrase for the encrypted live-usb" "$menu"
+        my_select ans "Please select a passphrase for the encrypted live-usb" "$menu"
         [ "$ans" != 'more' ] && break
     done
 
@@ -1058,7 +1025,7 @@ select_passphrase_type() {
             msg $"You will be asked to create a passphrase during the first boot" ;;
 
         ask)
-            msg $"Soon you will be asked to enter a new passphrase (3 times)" ;;
+            msg "Soon you will be asked to enter a new passphrase (3 times)" ;;
 
         index=*)
             i=${ans#*=}
@@ -1082,8 +1049,8 @@ validate_passphrase_type() {
 
     case $arg in
                   "")  ;;
-          first-boot)  msg $"You will be asked to create a passphrase during the first boot" ;;
-                 ask)  msg $"You will be asked to create a passphrase" ;;
+          first-boot)  msg "You will be asked to create a passphrase during the first boot" ;;
+                 ask)  msg "You will be asked to create a passphrase" ;;
               random)  test_rand $PP_NUM_WORDS ;;
             random=*)  test_rand "$val"        ;;
               file=*)  test_phrase_file "$val" ;;
@@ -1098,9 +1065,9 @@ test_rand() {
     local num=$1
     case $num in
         [1-9]|1[0-9]|20) ;;
-        *) fatal $"Only %s through %s random words are allowed in passphrase. Invalid arg: %s" 1 20 "$arg"
+        *) fatal "Only %s through %s random words are allowed in passphrase. Invalid arg: %s" 1 20 "$arg"
     esac
-    msg $"Will create a random passphrase %s words long" "$(nq $num)"
+    msg "Will create a random passphrase %s words long" "$(nq $num)"
 }
 
 #------------------------------------------------------------------------------
@@ -1108,18 +1075,18 @@ test_rand() {
 #------------------------------------------------------------------------------
 test_phrase_file() {
     local file=$1
-    test -e "$file" || fatal $"Cannot find phrase file %s" "$file"
-    test -r "$file" || fatal $"Cannot read phrase file %s" "$file"
+    test -e "$file" || fatal "Cannot find phrase file %s" "$file"
+    test -r "$file" || fatal "Cannot read phrase file %s" "$file"
     local lines=$(cat "$file" | wc -l)
     case $lines in
         0)  ;;
 
-        1) warn $"Phrase files should not have a trailing new-line character"
-           msg  $"Will work around this" ;;
+        1) warn "Phrase files should not have a trailing new-line character"
+           msg  "Will work around this" ;;
 
-        *) fatal $"Phrase file can have only one line" ;;
+        *) fatal "Phrase file can have only one line" ;;
     esac
-    msg $"Will read passphrase from file %s" "$(pq "$file")"
+    msg "Will read passphrase from file %s" "$(pq "$file")"
 }
 
 #------------------------------------------------------------------------------
@@ -1139,9 +1106,9 @@ set_rand_phrase() {
 say_using_phrase() {
     local phrase=$1
 
-    msg $"Will use phrase %s" "$(bq "$phrase")"
-    msg $"Please carefully write it down in a safe place"
-    msg $"If you forget this phrase then the live-usb will be useless"
+    msg "Will use phrase %s" "$(bq "$phrase")"
+    msg "Please carefully write it down in a safe place"
+    msg "If you forget this phrase then the live-usb will be useless"
 }
 
 #------------------------------------------------------------------------------
@@ -1199,11 +1166,11 @@ dict_words() {
 # Pretty much WYSIWYG
 #------------------------------------------------------------------------------
 overall_mode_menu() {
-    encrypt    || menu_printf simple  $"Make a full-featured live-usb"
-    data_first || menu_printf data    $"Start live-usb with a data partition"
+    encrypt || menu_printf simple  $"Make a full-featured live-usb"
     menu_printf encrypt $"Make an encrypted full-featured live-usb"
     menu_printf default $"Make a customized live-usb (includes encryption option)"
     menu_printf other   $"Other options"
+
 }
 
 #------------------------------------------------------------------------------
@@ -1213,7 +1180,7 @@ select_overall_mode() {
     local cmd_var=$1 q_var=$2 ans cmd_val q_val
 
     while true; do
-        local title=$"Please select an action to perform"
+        local title=$"Please select what action to perform"
         local menu=$(overall_mode_menu)
         local not_done=""
         my_select 'ans' "$title" "$menu"
@@ -1221,7 +1188,6 @@ select_overall_mode() {
                       encrypt) q_val=simple ; ENCRYPT=true               ;;
                       default) q_val=$ans                                ;;
                        simple) q_val=$ans                                ;;
-                         data) q_val=simple ; DATA_FIRST_FS=choose       ;;
                         other) select_other_mode                         ;;
                             *) internal_error select_overall_mode "$ans" ;;
         esac
@@ -1253,9 +1219,9 @@ other_mode_menu() {
 #
 #------------------------------------------------------------------------------
 select_other_mode() {
-    local ans2 title=$"Please select what other action to perform"
+    local ans2 title="Please select what other action to perform"
     local menu=$(other_mode_menu)
-    BACK_TO_MAIN=$"Go back to main menu"
+    BACK_TO_MAIN=$"go back to main menu"
     my_select 'ans2' "$title" "$menu"
     case $ans2 in
                  quit) not_done=true                             ;;
@@ -1289,7 +1255,7 @@ select_target_device() {
 
     if is_mountpoint "$from_dev"; then
         from_dev=$(df $(readlink -f "$from_dev") | tail -n1 | awk '{print $1}')
-        msg $"From device %s" "$(pq $from_dev)"
+        msg "From device %s" "$(pq $from_dev)"
     fi
 
     local menu=$(cli_drive_menu "$live_dev" "$from_dev")
@@ -1320,6 +1286,7 @@ select_target_device() {
     case $cnt in
         0) fatal $"No available target usb devices were found" ;;
         1) dev=$(echo "$menu" | cut -d"$P_IFS" -f1 | head -n1)
+            #Msg $"Only one target usb device was found %s" "$(echo $(echo "$menu" | cut -d"$P_IFS" -f2))"
             Msg $"Only one target usb device was found %s" "$(pq $dev)"
            eval $var=\$dev
            return ;;
@@ -1380,7 +1347,7 @@ verify_sizes() {
         fi
 
         log_it_q echo
-        # Table headers for sizes of: entire drive, [data partition] [bios partition], main partition, uefi partition
+        # Table headers for sizes of: entire drive, [bios partition], main partition, uefi partition
             log_it_q usb_stats $"entire drive"    "$total_size" "$alloc_val"     "$total_extra"  \
                                $"data partition"  "$data_size"  "0"              "$data_size"    \
                                $"main partition"  "$main_val"   "$main_needed2"  "$main_extra"   \
@@ -1405,14 +1372,12 @@ verify_sizes() {
 
         # Only offer to change if a size was not given on the cmdline
         [ ${#cmd_percent} -gt 0 ] && break
-        if ! data_first; then
-            expert_YES_no $"Do you want to change how much of the device is used?" || break
-        fi
+        expert_YES_no $"Do you want to change how much of the device is used?" || break
         select_partition_size percent "$min_percent" "$total_size"
 
         alloc_val=$((total_size * percent / 100 - 1))
-        # Have set the size to <13%> (<1.20 GiB>)
-        msg $"Have set size to %s (%s)" "$(hq $percent%)" "$(nq_label_meg $alloc_val)"
+        # Have set the size to <13%> (1,200 MiB)
+        msg $"Have set size to %s (%s MiB)" "$(hq $percent%)" "$(nq $(add_commas $alloc_val | color_commas))"
     done
 
     check_size ext $main_extra $MAIN_MARGIN fatal
@@ -1439,10 +1404,9 @@ ext_overhead() {
 # Wrapper around partition_size_menu() in the lib
 #------------------------------------------------------------------------------
 select_partition_size() {
-    local var=$1  min_size=$2  total_size=$3  max_percent
-    data_first && max_percent=90
+    local var=$1  min_size=$2  total_size=$3
     local title1=$"Please select how much space to use for the live-usb partitions"
-    local menu=$(partition_size_menu "$min_size" "$total_size" $max_percent)
+    local menu=$(partition_size_menu "$min_size" "$total_size")
     my_select $var "$title1" "$menu"
 }
 
@@ -1478,20 +1442,17 @@ guess_partitioning() {
     local fs3=$(get_fstype "$part3")
     local fs4=$(get_fstype "$part4")
 
-    local fs_str="$fs1:$fs2:$fs3:$fs4"
-    printf "File systems on device %s\n" "$fs_str" >> $LOG_FILE
-    case $fs_str in
-                   ext4:vfat:*)                                             ;;
-                 *:ext4:vfat:*) DATA_FIRST=true ; DATA_FIRST_FS=$fs1        ;;
-        ext4:cryto_LUKS:vfat:*) ENCRYPT=true    ; CRYPT_PART=$part2         ;;
-       *:ext4:crypto_LUKS:vfat) ENCRYPT=true    ; CRYPT_PART=$part3
-                                DATA_FIRST=true ; DATA_FIRST_FS=$fs1        ;;
-        *)  fatal $"This does not look like a live-usb device %s" "$fs_str" ;;
+    case $fs1:$fs2:$fs3:$fs4 in
+                   ext4:vfat:*)                                  ;;
+                 *:ext4:vfat:*)  DATA_FIRST=true                  ;;
+        ext4:cryto_LUKS:vfat:*)                   ENCRYPT=true   ;;
+        *:ext4:cryto_LUKS:vfat) DATA_FIRST=true  ; ENCRYPT=true   ;;
+        *)  fatal "This does not look like a live-usb device (%s)" $fs_type ;;
     esac
 
     # Get the type of partitioning
     MSDOS_GPT=$(parted --script $drive unit MiB print | sed -n "s/^Partition Table: *//p")
-    msg $"Found %s partitioning" "$(pq $MSDOS_GPT)"
+    msg "Found %s partitioning" "$(pq $MSDOS_GPT)"
     encrypt && shout $"Assuming this is an encrypted live-usb"
     setup_devices $drive
 }
@@ -1523,10 +1484,6 @@ setup_devices() {
         BIOS_DEV=$(get_partition $drive $bios_part)
         MAIN_DEV=$(get_partition $drive $main_part)
         UEFI_DEV=$(get_partition $drive $UEFI_PART)
-
-        # We need to fix this when setup_devices() is run a 2nd time
-        BIOS_DIR=$WORK_DIR/bios
-
     else
         local main_part=1 ; UEFI_PART=2
 
@@ -1582,24 +1539,12 @@ write_phrase_file() {
 }
 
 #------------------------------------------------------------------------------
-# Remount the main partition from an encrypted live-usb
-#------------------------------------------------------------------------------
-remount_encrypted() {
-    local dev=$1  name=$2
-    echo "dev=$dev  name=$name"
-    cryptsetup open --type luks "$dev" "$name" \
-        || fatal $"Could not remount encrypted partition %s" "$(pqw $dev)"
-
-    LUKS_DEV=/dev/mapper/$name
-}
-
-#------------------------------------------------------------------------------
 # Create an encrypted partition using the supplied phrase-file and name
 #------------------------------------------------------------------------------
 encrypt_partition() {
     local dev=$1  name=$2  phrase=$3
-    test -e $dev || fatal $"Device to encrypt %s does not exist" $dev
-    test -b $dev || fatal $"Device to encrypt %s is not a block device" $dev
+    test -e $dev || fatal "Device to encrypt %s does not exist" $dev
+    test -b $dev || fatal "Device to encrypt %s is not a block device" $dev
 
     msg $"About to encrypt device %s" "$(pq $dev)"
 
@@ -1619,7 +1564,7 @@ encrypt_partition() {
                   *) internal_error phrase-type "$phrase"
         esac
 
-        [ $ret -eq 0 ] || dmesg_fatal $"Failed to create encrypted device"
+        [ $ret -eq 0 ] || fatal $"Failed to create encrypted device"
     fi
 
     case $phrase in
@@ -1633,7 +1578,7 @@ encrypt_partition() {
                 fi ;;
     esac
 
-    [ $ret -eq 0 ] || dmesg_fatal $"Failed to open encrypted device"
+    [ $ret -eq 0 ] || fatal $"Failed to open encrypted device"
 
     LUKS_DEV=/dev/mapper/$name
     msg $"Encryption successful"
@@ -1646,15 +1591,15 @@ encrypt_partition() {
 #------------------------------------------------------------------------------
 mount_device() {
     local dev=$(expand_device "$1")  dir=$2
-    [ ${#dev} -gt 0 ]     || fatal $"Could not find device %s" "$1"
-    mkdir -p "$dir"       || fatal $"Failed to create mountpoint directory %s" "$dir"
-    is_mountpoint "$dir"  && fatal $"Directory %s is already a mountpoint"   "$dir"
+    [ ${#dev} -gt 0 ]     || fatal "Could not find device %s" "$1"
+    mkdir -p "$dir"       || fatal "Failed to create mountpoint directory %s" "$dir"
+    is_mountpoint "$dir"  && fatal "Directory '%s' is already a mountpoint"   "$dir"
 
-    [ -z "$3" ] && is_mounted "$dev" && fatal $"Device %s is already mounted" "$dev"
+    [ -z "$3" ] && is_mounted "$dev" && fatal "Device %s is already mounted" "$dev"
 
     [ "$(stat -c %t "$dev")" = "b" ] && msg $"Please wait while we mount optical disc at %s" "$(pq $dev)"
     always_cmd mount -o ro "$dev" "$dir"
-    is_mountpoint "$dir"  || fatal $"Failed to mount device %s at %s" "$dev"   "$dir"
+    is_mountpoint "$dir"  || fatal "Failed to mount device %s at %s" "$dev"   "$dir"
 }
 
 #------------------------------------------------------------------------------
@@ -1664,10 +1609,10 @@ mount_device() {
 #------------------------------------------------------------------------------
 clone_directory() {
     local from_dir=$1  targ_dir=$2  live_dev=$3
-    is_mountpoint "$targ_dir" && fatal $"Directory %s is already a mountpoint" "$targ_dir"
+    is_mountpoint "$targ_dir" && fatal "Directory '%s' is already a mountpoint" "$targ_dir"
 
-    test -d "$from_dir"       || fatal $"Clone directory %s is not a directory"   "$from_dir"
-    #is_mountpoint "$from_dir" || warn  "Clone directory %s is not a mountpoint"  "$from_dir"
+    test -d "$from_dir"       || fatal "Clone directory '%s' is not a directory"   "$from_dir"
+    #is_mountpoint "$from_dir" || warn  "Clone directory '%s' is not a mountpoint"  "$from_dir"
 
     # mounting it as tmpfs makes cleanup trivial (we are still touching files nad
     # making directories
@@ -1682,13 +1627,13 @@ clone_directory() {
     local ret=$?
     case $ret in
         0) ;;
-        1) fatal $"No %s file found in any directory on clone device at %s"     "$LINUXFS_NAME" "$from_dir" ;;
-        2) fatal $"No live-boot directory found on clone device at %s"          "$from_dir" ;;
-        3) fatal $"Multiple live-boot directories found on clone device at %s"  "$from_dir" ;;
+        1) fatal "No '%s' file found in any directory on clone device at '%s'"   "$LINUXFS_NAME" "$from_dir" ;;
+        2) fatal "No live-boot directory found on clone device at '%s'"          "$from_dir" ;;
+        3) fatal "Multiple live-boot directories found on clone device at '%s'"  "$from_dir" ;;
         *) internal_error "find_live_boot_dir" $ret ;;
     esac
 
-    msg $"Live boot directory %s" "$(pq $boot_dir)"
+    msg "Live boot directory %s" "$(pq $boot_dir)"
     ISO_BOOT_DIR=$boot_dir
 
     # Prepare to get all files/dirs from under the boot-directory on a frugal install
@@ -1698,7 +1643,7 @@ clone_directory() {
     add_persist_files "$from_dir" "$boot_dir" "$live_dev"
 
     if [ -z "${boot_dir##*Frugal*}" ]; then
-        msg $"Cloning from a frugal directory"
+        msg "Cloning from a frugal directory"
         src_root_dir=$full_boot_dir
     fi
 
@@ -1712,7 +1657,7 @@ clone_directory() {
         from="$src_root_dir/$dir"
         dest="$targ_dir/$dir"
         test -d "$from" || continue
-        mkdir -p "$dest" || fatal $"Could not create directory %s" "$dest"
+        mkdir -p "$dest" || fatal "Could not create directory %s" "$dest"
         mount --bind "$from" "$dest"
     done <<Clone_Dirs
 $(cd "$src_root_dir" && eval "ls -d $CLONE_DIRS" 2>/dev/null)
@@ -1725,8 +1670,8 @@ Clone_Dirs
         from="$src_root_dir/$file"
         dest="$targ_dir/$file"
         test -f "$from" || continue
-        mkdir -p "$(dirname "$dest")" || fatal $"Could not mkdir %s" "$(dirname "$dest")"
-        touch "$dest"                 || fatal $"Could not touch file %s" "$dest"
+        mkdir -p "$(dirname "$dest")" || fatal "Could not mkdir %s" "$(dirname "$dest")"
+        touch "$dest"                 || fatal "Could not touch file %s" "$dest"
         mount --bind "$from" "$dest"
     done <<Clone_Files
 $(cd "$src_root_dir" && eval "ls -d $CLONE_FILES" 2>/dev/null)
@@ -1739,8 +1684,8 @@ Clone_Files
         dest="$targ_dir/$DEF_BOOT_DIR/$file"
 
         test -f "$from" || continue
-        mkdir -p "$(dirname "$dest")" || fatal $"Could not mkdir %s" "$(dirname "$dest")"
-        touch "$dest"                 || fatal $"Could not touch file %s" "$dest"
+        mkdir -p "$(dirname "$dest")" || fatal "Could not mkdir %s" "$(dirname "$dest")"
+        touch "$dest"                 || fatal "Could not touch file %s" "$dest"
         mount --bind "$from" "$dest"
     done <<Clone_Bdir_Files
 $(cd "$full_boot_dir" && eval "ls -d $CLONE_BDIR_FILES" 2>/dev/null)
@@ -1789,7 +1734,7 @@ add_one_persist_file() {
     local flag=$1  full=$2  name=${2##*/}
     local du_opts="--apparent-size --human-readable"
     local size=$(du $du_opts "$full" | cut -f1)
-
+    #echo
     # Found (<size>) <name> persistence file
     msg $"Found (%s) %s persistence file" "$(nq $size)" "$(pq $name)"
     if [ "$flag" ] || q_mode gui || YES_no $"Do you want to clone this file?"; then
@@ -1812,7 +1757,7 @@ validate_clone_persist() {
         case $p in
             h|home) CLONE_HOME=true ;;
             r|root) CLONE_ROOT=true ;;
-                 *) fatal $"Unknown %s parameter: %s" "--clone-persist" "$p" ;;
+                 *) fatal "Unknown --clone-persist parameter: %s" "$p" ;;
         esac
     done
 
@@ -1820,12 +1765,12 @@ validate_clone_persist() {
         case $p in
             h|home) NO_CLONE_HOME=true ;;
             r|root) NO_CLONE_ROOT=true ;;
-                 *) fatal $"Unknown %s parameter: %s" "--no-clone-persist" "$p" ;;
+                 *) fatal "Unknown --no-clone-persist parameter: %s" "$p" ;;
         esac
     done
 
-    [ -n "$CLONE_HOME" -a -n "$NO_CLONE_HOME" ] && fatal $"Can't both clone and not clone %s"  "$(pqw home)"
-    [ -n "$CLONE_ROOT" -a -n "$NO_CLONE_ROOT" ] && fatal $"Can't both clone and not clone %s"  "$(pqw root)"
+    [ -n "$CLONE_HOME" -a -n "$NO_CLONE_HOME" ] && fatal "Can't both clone and not clone %s"  "$(pqw home)"
+    [ -n "$CLONE_ROOT" -a -n "$NO_CLONE_ROOT" ] && fatal "Can't both clone and not clone %s"  "$(pqw root)"
 }
 
 #------------------------------------------------------------------------------
@@ -1850,32 +1795,26 @@ validate_data_first() {
         esac
     done
 
-    : ${DATA_FIRST_FS:=choose}
-
     # Validate the size (we already stripped off the "%"
     case $data_size in
-                      "") ;;
         [0-9]|[0-9][0-9]) ;;
-        *) fatal $"Invalid %s size specification %s" "$(pqw --data-first)" "$(pqw $data_size)" ;;
+        *) fatal "Invalid %s size specification %s" "$(pqw --data-first)" "$(pqw $data_size)" ;;
     esac
 
-    q_mode gui && fatal_z "$size_val$data_size" \
-        "A size must be specified to use the %s option" "$(pqw --data-first)"
+    fatal_z "$size_val$data_size" "A size must be specified to use the %s option" "$(pqw --data-first)"
 
-    # Make sure we can create the file system type requested
-    # Postpone this check until after we've offered the menu if needed
-
-    #validate_fs_type "${DATA_FIRST_FS:=choose}"
+    # Maye sure we can create the file system type requested
+    validate_fs_type "${DATA_FIRST_FS:=vfat}"
 
     # Cannot specify the size in two different ways!
     [ -n "$data_size" -a -n "$size_val" ] \
         && fatal "Cannot combine %s with %s" "$(pqw --data-first=size)" "$(pqw --size)"
 
-    [ -z "$data_size" ] && return
-
+    # if
     : ${size_val:=$((100 - data_size))}
 
     eval $size_var=\$size_val
+
 }
 
 #------------------------------------------------------------------------------
@@ -1886,12 +1825,12 @@ validate_fs_type() {
     [ -z "$fstype" ]  && return 0
 
     case $fstype in
-        fat32) fstype=vfat ;;
+        fat32) fstype=vfat
     esac
 
     which "mkfs.$fstype" &>/dev/null && return 0
 
-    fatal $"Don't know how to create a %s filesystem" "$(pqw $fstype)"
+    fatal "Don't know how to create a %s filesystem" "$(pqw $fstype)"
 }
 
 #===== "REAL" WORK STARTS HERE ================================================
@@ -1899,32 +1838,22 @@ validate_fs_type() {
 
 #------------------------------------------------------------------------------
 # Clear out previous partition tables.
-# Note we use 512 byte blocks because some devices have an odd number of such
-# blocks.  This mostly matters when we write to the end of the device to clear
-# the 2nd gpt partition table.
 #------------------------------------------------------------------------------
 clear_partition() {
     local dev=$1
-    local bytes=$(parted --script $dev unit B print 2>/dev/null | sed -rn "s/^Disk.*: ([0-9]+)B$/\1/ip")
-    local block_size=512
-    local pt_size=$((17 * 1024))
-    local pt_cnt=$((pt_size / block_size))
-    local sneaky_bytes=$((32 * 1024))
-    local sneaky_offset=$((sneaky_bytes / block_size))
-
-    local total_blocks=$((bytes / $block_size))
+    local total=$(parted --script $dev unit KiB print 2>/dev/null | sed -rn "s/^Disk.*: ([0-9]+)kiB$/\1/ip")
 
     # Clear out previous primary partition table
-    cmd_dd if=/dev/zero of=$dev bs=$block_size count=$pt_cnt
+    cmd_dd if=/dev/zero of=$dev bs=1K count=17
 
     # Clear out sneaky iso-hybrid partition table
-    cmd_dd if=/dev/zero of=$dev bs=$block_size count=$pt_cnt seek=64
+    cmd_dd if=/dev/zero of=$dev bs=1K count=17 seek=32
 
-    [ -n "$bytes" ] || return
-    local offset=$((total_blocks - $pt_cnt))
+    [ -n "$total" ] || return
+    local offset=$((total - 17))
 
     # Clear out secondary gpt partition table
-    cmd_dd conv=notrunc if=/dev/zero of=$dev bs=$block_size count=$pt_cnt seek=$offset
+    cmd_dd conv=notrunc if=/dev/zero of=$dev bs=1K count=17 seek=$offset
 
     # Tell kernel the partition table has changed
     cmd partprobe $dev
@@ -1948,16 +1877,16 @@ do_partition() {
 
     # Using <gpt|msdos> partitioning
     msg $"Using %s partitioning" $(pq $type)
-    local err_msg=$"Partitioning failed at %s"
+    local err_msg="Partitioning failed at %s"
     local PREAMB="parted --script --align optimal $dev unit MiB"
-    cmd $PREAMB mklabel $type || dmesg_fatal "$err_msg" making partition
+    cmd $PREAMB mklabel $type || fatal "$err_msg" making partition
 
     local START=1  PART_NUM=0  main_fs=ext4
 
     if data_first; then
         local total_size=$TOTAL_SIZE
         local remaining=$((total_size - uefi_size - main_size - bios_size -1))
-        local fs_type=${DATA_FIRST_FS:-fat32}
+        local fs_type=${DATA_FIRST:-fat32}
         _add_partition "$remaining" $fs_type data
     fi
 
@@ -1966,12 +1895,12 @@ do_partition() {
         main_fs=
     fi
     _add_partition "$main_size" $main_fs  main
-    cmd $PREAMB set $PART_NUM $boot_flag on || dmesg_fatal "$err_msg" boot-flag
+    cmd $PREAMB set $PART_NUM $boot_flag on || fatal "$err_msg" boot-flag
     _add_partition "$uefi_size" fat32  uefi
-    cmd $PREAMB set $PART_NUM esp on || dmesg_fatal "$err_msg" esp-flag
+    cmd $PREAMB set $PART_NUM esp on || fatal "$err_msg" esp-flag
 
     if [ "$type" = 'gpt' -a "$DO_PMBR" ]; then
-        cmd $PREAMB disk_set pmbr_boot on || dmesg_fatal "$err_msg" disk-set
+        cmd $PREAMB disk_set pmbr_boot on || fatal "$err_msg" disk-set
     fi
 
     # Tell kernel the partition table has changed
@@ -1985,7 +1914,7 @@ do_partition() {
 #------------------------------------------------------------------------------
 _add_partition() {
     local fs_type=$1 size=$1  fs_type=$2  name=$3
-    local err_msg=$"partitioning failed at %s partition"
+    local err_msg="partitioning failed at %s partition"
     fatal_z "$START" "internal error: no start was specified"
 
     local part_fstype
@@ -1997,20 +1926,17 @@ _add_partition() {
 
     clear_filesystem $dev $START
     local end=$((START + size - 1))
-    cmd $PREAMB mkpart primary $part_type $START $end || dmesg_fatal "$err_msg" "$name"
+    cmd $PREAMB mkpart primary $part_type $START $end || fatal "$err_msg" "$name"
     START=$((end + 0))
     PART_NUM=$((PART_NUM + 1))
 }
 
 #------------------------------------------------------------------------------
-# Gives the size in MiB
-# Ask for bytes and divide by 1 MiB to ensure we round down.
+#
 #------------------------------------------------------------------------------
 get_total_size() {
     local dev=$1
-    local bytes=$(parted --script $dev unit B print 2>/dev/null | sed -rn "s/^Disk.*: ([0-9]+)B$/\1/p")
-    [ -z "$bytes" ] && return
-    echo $((bytes / 1024 / 1024))
+    parted --script $dev unit MiB print 2>/dev/null | sed -rn "s/^Disk.*: ([0-9]+)MiB$/\1/p"
 }
 
 #------------------------------------------------------------------------------
@@ -2032,19 +1958,18 @@ do_makefs_ext() {
 
     force makefs && force_ext="-F"
     cmd mkfs.ext4 $force_ext $EXT4_NO_64BIT $options $dev \
-        || dmesg_fatal 'makefs' $"Could not make %s file system on %s" 'ext4' "$dev"
+        || fatal 'makefs' "Could not make %s file system on %s.  Perhaps try %s" 'ext4' $dev "--force=makefs"
 
     [ -n "$label" ] && cmd tune2fs -L "${label:0:16}" $dev
 }
 
 #------------------------------------------------------------------------------
 # Make the fat32 file system
-# Note: we convert the label to upper case to prevent whining
 #------------------------------------------------------------------------------
 do_makefs_uefi() {
-    local uefi_dev=$1  label=${2:-LIVE-ESP}
-    cmd mkfs.vfat -n "${label^^}" $uefi_dev \
-        || dmesg_fatal $"Could not make %s file system on %s" "fat32" "$uefi_dev"
+    local uefi_dev=$1  label=${2:-live-esp}
+    cmd mkfs.vfat -n "${label:0:11}" $uefi_dev \
+        || fatal "Could not make %s file system on %s" "fat32" "$uefi_dev"
 }
 
 #------------------------------------------------------------------------------
@@ -2117,10 +2042,10 @@ check_usb_md5() {
             linuxfs|initrd.gz|vmlinuz)  fix_our_md5 "$md5_file" ;;
         esac
 
-        msg $"check md5 for %s" "$(pq "$name")"
+        msg "check md5 for %s" "$(pq "$name")"
         (cd $dir && cmd md5sum -c "$fname") && continue
 
-        warn $"MD5 CHECK FAILED FOR %s" "$(pqw $name)"
+        warn "MD5 CHECK FAILED FOR %s" "$(pqw $name)"
 
         # Only error out if it is one of our files
         case $name in
@@ -2135,9 +2060,9 @@ MD5_Files
     echo
 
     yes_NO_fatal "nomd5"                         \
-        $"Do you want to continue anway?"         \
-        $"Use %s to always ignore this warning"   \
-        $"At least one file failed the md5 check"
+        "Do you want to continue anway?"         \
+        "Use %s to always ignore this warning"   \
+        "At least one file failed the md5 check"
 }
 
 #------------------------------------------------------------------------------
@@ -2156,7 +2081,7 @@ fix_our_md5() {
         $name) return ;;
     esac
 
-    msg $"Fix md5 file format in %s" "$(pqw $fname)"
+    msg "Fix md5 file format in %s" "$(pqw $fname)"
     cmd sed -i "s/ .*\|$/  $name/" "$md5_file"
 }
 
@@ -2171,7 +2096,7 @@ copy_files_spec() {
     test -z "$spec" && fatal "Missing list of files to copy to %s" "$(pqw $targ)"
 
     msg $"copy from %s to %s partition" "$(pq $(basename $src))" "$(pq $(basename $targ))"
-    msg $"files %s" "$(pq $spec)"
+    msg $"files: %s" "$(pq $spec)"
 
     while read file; do
         test -z "$file" && continue
@@ -2189,7 +2114,7 @@ Copy_Files_Spec
 start_initrd_encryption() {
     local from_file=$1  initrd_dir=${2:-$INITRD_DIR}  linux_dir=$3
 
-    test -r "$from_file" || fatal $"Could not find initrd file %s" "$(pqw $from_file)"
+    test -r "$from_file" || fatal "Could not find initrd file %s" "$(pqw $from_file)"
     unpack-initrd -f "$from_file" -d $initrd_dir || fatal $"An error occurred unpacking the initrd"
 
     #grep -q cryptsetup $initrd_dir/init || fatal $"This live initrd cannot do encryption"
@@ -2204,7 +2129,7 @@ start_initrd_encryption() {
         test -d $mod_dir/$kernel/kernel               || continue
         test -d $linux_dir/lib/modules/$kernel/kernel || continue
 
-        msg $"add %s modules to initrd" "$(pq $kernel encryption)"
+        msg "add %s modules to initrd" "$(pq $kernel encryption)"
         cmd copy-initrd-modules --quiet --only-encrypt --from=$linux_dir --to=$initrd_dir \
             || fatal "Kernel modules were not copied.  Do you need to update copy-initrd-modules?"
 
@@ -2222,7 +2147,7 @@ finish_initrd_encryption() {
 
     [ "$PRETEND" ] && return
 
-    unpack-initrd -f $to_file -d $initrd_dir --repack || fatal $"An error occurred repacking the initrd"
+    unpack-initrd -f $to_file -d $initrd_dir --repack || fatal "An error occurred repacking the initrd"
     local md5_sum=$(cd $(dirname $to_file) && md5sum $(basename $to_file))
     cmd write_file "$to_file".md5 "$md5_sum"
 }
@@ -2234,14 +2159,14 @@ finish_initrd_encryption() {
 enable_disable_initrd_encryption() {
     local from_file=${1:-$2}  to_file=$2  initrd_dir=${3:-$INITRD_DIR}
 
-    test -r "$from_file" || fatal $"Could not find initrd file %s" "$(pqw $from_file)"
+    test -r "$from_file" || fatal "Could not find initrd file %s" "$(pqw $from_file)"
     unpack-initrd -f "$from_file" -d $initrd_dir || fatal "An error occurred unpacking the initrd"
 
 
     local encrypt_file=$initrd_dir/etc/encrypt
     if encrypt; then
-        test -e $initrd_dir/bin/cryptsetup  || fatal $"The %s program was not found in the initrd" cryptsetup
-        grep -q cryptsetup $initrd_dir/init || fatal $"This initrd cannot do encryption"
+        test -e $initrd_dir/bin/cryptsetup  || fatal "The %s program not found in the initrd" cryptsetup
+        grep -q cryptsetup $initrd_dir/init || fatal "This initrd cannot do encryption"
 
         msg $"Enable encryption in the live initrd"
         echo "$ENCRYPT_ENABLE" > $encrypt_file
@@ -2323,7 +2248,7 @@ do_cheats_syslinux() {
         Msg "syslinux params: %s" "$(pq $params $cheats)"
         VERBOSE=$verbose CMDLINE="$params $cheats" cmd gfxsave $bios_dir/boot both
     else
-        pwarn "Could not find %s file to update" "$(basename $syslinux_cfg)"
+        pwarn "Could not find '%s' file to update" "$(basename $syslinux_cfg)"
     fi
 }
 
@@ -2345,7 +2270,7 @@ do_cheats_grub() {
         cmd grub2-save $uefi_dir --no-kernel --cheats="${params% } $cheats"
     else
         # Could not find '<grub.cfg>' file to update
-        pwarn "Could not find %s file to update" $(basename $grub_cfg)
+        pwarn "Could not find '%s' file to update" $(basename $grub_cfg)
     fi
 }
 
@@ -2363,27 +2288,24 @@ do_uuids() {
 
     pause uuids
 
-    if [ ${#bios_uuid} -eq 0 ]; then
-        warn "No %s given for %s partition" UUID bios
-        return
-    fi
+    local dir
+    for dir in $bios_dir $main_dir; do
+        [ ${#uefi_uuid} -gt 0 ] || continue
+        local uefi_file=$dir/antiX/esp-uuid
+        cmd mkdir -p $(dirname $uefi_file) || fatal "Making directory '%s' failed" "$(dirname $uefi_file)"
+        cmd write_file $uefi_file $uefi_uuid
+    done
 
-    if encrypt; then
-        fatal_z $main_dir "In do_uuids()  main_dir must be given in encrypt mode"
-        local bios_uuid_file=$main_dir/antiX/bios-dev-uuid
-        cmd mkdir -p $(dirname $bios_uuid_file)
-        cmd write_file "$bios_uuid_file" "$bios_uuid"
+    if [ ${#bios_uuid} -eq 0 ]; then
+        warn "No %s given for %s partition" UUID ext4
+        return
     fi
 
     local base_grub_cfg=$(basename $efi_grub_cfg)
 
     # Detect the newer grub config
     if test -e $bios_dir/$EFI_GRUB_CONF; then
-
-        # Do not make multiple id files
-        test -e $bios_dir/$DID_EFI_FILE && return
-
-        msg $"Using %s grub config %s" "$(pq antiX/MX)" "$(pq 2.0)"
+        msg "Using grub config %s" "$(pq 2.0)"
 
         # Copy over the efi-grub.cfg and signal we have done it
         cmd mkdir -p $(dirname $efi_grub_cfg)
@@ -2400,22 +2322,12 @@ do_uuids() {
 
          if grep -q "^[^#]*%ID_FILE%" $efi_grub_cfg ; then
             local rand_file=/boot/grub/config/$(random_string).id
-            cmd touch $bios_dir$rand_file
+            cmd touch $boot_mp$rand_file
             cmd sed -i "/^\s*#/! s|%ID_FILE%|$rand_file|" $efi_grub_cfg
         fi
 
         return
     fi
-
-    msg $"Using %s grub config %s" "$(pq antiX/MX)" "$(pq 1.0)"
-
-    local dir
-    for dir in $bios_dir $main_dir; do
-        [ ${#uefi_uuid} -gt 0 ] || continue
-        local uefi_file=$dir/antiX/esp-uuid
-        cmd mkdir -p $(dirname $uefi_file) || fatal "Making directory %s failed" "$(dirname $uefi_file)"
-        cmd write_file $uefi_file $uefi_uuid
-    done
 
     if ! test -e $efi_grub_cfg; then
         # Could not find <grub.cfg> file
@@ -2446,22 +2358,16 @@ do_uuids() {
 #
 #------------------------------------------------------------------------------
 data_first_uuid() {
-    bios_dir=$1  data_dev=$2  main_dir=$3
+    bios_dir=$1  data_dev=$2
+
     data_first || return
     local uuid=$(get_uuid "$data_dev")
     [ ${#uuid} -gt 0 ] || return
+    local uuid_file=$dir/antiX/storage-uuid
+    cmd mkdir -p $(dirname $uuid_file) || fatal "Making directory '%s' failed" "$(dirname $uuid_file)"
+    cmd write_file $uuid_file $uuid
 
-    # Only write the file once if the directories are the same
-    [ "$bios_dir" = "$main_dir" ] && main_dir=""
-
-    local dir
-    for dir in $bios_dir $main_dir; do
-        local uuid_file=$dir/antiX/data-uuid
-        cmd mkdir -p $(dirname $uuid_file) || fatal "Making directory %s failed" "$(dirname $uuid_file)"
-        cmd write_file $uuid_file $uuid
-    done
 }
-
 #------------------------------------------------------------------------------
 # Create a random hex string $cnt * 2 chars long
 #------------------------------------------------------------------------------
@@ -2589,81 +2495,41 @@ write_random_seed() {
 # Change the initrd file to the template initrd selected by the user.
 #------------------------------------------------------------------------------
 update_initrd() {
-    local bios_dir=$1  main_dir=$2  initrd_template=$(readlink -f "$3")
+    local main_dir=$1  initrd_template=$2
 
     need_prog copy-initrd-programs unpack-initrd copy-initrd-modules vmlinuz-version
 
     local initrd_path=$DEF_BOOT_DIR/initrd.gz
-    local initrd_file=$bios_dir/$initrd_path
+    local initrd_file=$main_dir/$initrd_path
     local linuxfs_path=$DEF_BOOT_DIR/linuxfs
     local linuxfs_file=$main_dir/$linuxfs_path
     local vmlinuz_path=$DEF_BOOT_DIR/vmlinuz
-    local vmlinuz_file=$bios_dir/$vmlinuz_path
+    local vmlinuz_file=$main_dir/$vmlinuz_path
 
-    #pause initrd
+    pause initrd
 
-    # Sanity checks
     test -e $initrd_file  || fatal "Could not find %s file %s on main partition"  "$(pqw initrd)" "$(pqw $initrd_path)"
-
-    test -e $linuxfs_file || encrypt \
-        || fatal "Could not find %s file %s on main partition"  "$(pqw linuxfs)" "$(pqw $linuxfs_path)"
-
+    test -e $linuxfs_file || fatal "Could not find %s file %s on main partition"  "$(pqw linuxfs)" "$(pqw $linuxfs_path)"
     test -e $vmlinuz_file || fatal "Could not find %s file %s on main partition"  "$(pqw vmlinuz)" "$(pqw $vmlinuz_path)"
 
-    # Get live kernel so we can copy in the right modules
     local kernel=$(vmlinuz-version  --tabs --noheadings "$vmlinuz_file" | cut -f2)
     fatal_z "$kernel" "Could not determine the kernel version"
     msg "Found kernel %s" "$(pq $kernel)"
 
-    # Mount the linuxfs so we can get modules and programs from the horse's mouth
     local linux_dir=$LINUX_DIR  initrd_dir=$WORK_DIR/initrd
     mkdir -p $linux_dir  $initrd_dir || fatal "mkdir failed"
 
     my_mount "$linuxfs_file" "$linux_dir" -t squashfs -o loop,ro
 
-    # Sanity checks for the template and work with directories as well as files
-    if ! test -e "$initrd_template"; then
-        fatal "Could not find initrd template file %s" "$initrd_template"
-    fi
-
-    # We are copying to RAM so we don't want to use up too much space
-    # Accommodate a template file or directory (repo)
-    local size
-    if test -f "$initrd_template"; then
-        size=$(du -sm "$initrd_template" | tail -n1 | awk '{print $1}')
-    elif test -d "$initrd_template"; then
-        size=$(du -scm "$initrd_template"/[a-z]* | tail -n1 | awk '{print $1}')
-    else
-        fatal "The initrd template %s is not a file or a directory" "$initrd_template"
-    fi
-
-    msg $"initrd size %s" "$(nq $size MiB)"
-
-    [ "$size" -gt "$INITRD_MAX_SIZE" ] && fatal $"The initrd template %s seems too large" "$initrd_template"
-
-    if test -f "$initrd_template"; then
-        cmd unpack-initrd --from "$initrd_template" --dir "$initrd_dir" || fatal "Unpack failed"
-    elif test -d "$initrd_template"; then
-        (cd "$initrd_template" && find . | grep "^\./[a-z]" | cpio --quiet --owner=root:root -pd "$initrd_dir")
-    fi
-
+    cmd unpack-initrd --from "$initrd_template" --dir "$initrd_dir" || fatal "Unpack failed"
     copy_initrd_release "$linux_dir"  "$initrd_dir" 'always'
-
-    local e_args
-    encrypt && e_args="--encrypt"
-
-    verbose_cmd copy-initrd-programs --no-color --from=$linux_dir --to=$initrd_dir --clean
-    verbose_cmd copy-initrd-programs --no-color --from=$linux_dir --to=$initrd_dir $e_args \
-        || fatal $"Was unable to add all required programs to the live initrd"
-
+    cmd copy-initrd-programs --quiet --from=$linux_dir --to=$initrd_dir --clear
+    cmd copy-initrd-programs --quiet --from=$linux_dir --to=$initrd_dir
     cmd copy-initrd-modules --count --quiet --from=$linux_dir --to=$initrd_dir --kernel=$kernel
-
-    cmd copy-initrd-modules --quiet --only-encrypt --from=$linux_dir --to=$initrd_dir $e_args \
-            || fatal "Kernel modules were not copied.  Do you need to update copy-initrd-modules?"
 
     pause initrd
 
-    cmd unpack-initrd --from "$initrd_file" --dir "$initrd_dir" --repack || fatal $"Repack failed"
+    cmd unpack-initrd --from "$initrd_file" --dir "$initrd_dir" --repack || fatal "Repack failed"
     local md5_sum=$(cd $(dirname $initrd_file) && md5sum $(basename $initrd_file))
     cmd write_file "$initrd_file".md5 "$md5_sum"
 }
@@ -2700,11 +2566,11 @@ check_target() {
     # Make sure our target is a real device
     local target_dev=$(expand_device $target)
 
-    [ ${#target_dev} -gt 0 ] || fatal $"Could not find device %s" "$target"
+    [ ${#target_dev} -gt 0 ] || fatal "Could not find device %s" "$target"
     [ ${#live_dev}   -gt 0 ] || return
     local live_drive=$(get_drive ${live_dev##*/} )
     local targ_drive=$(get_drive ${target##*/}   )
-    [ "$live_drive" = "$targ_drive" ] && fatal $"Target %s cannot be on the live device %s" "$target" "$live_drive"
+    [ "$live_drive" = "$targ_drive" ] && fatal "Target '%s' cannot be on the live device '%s'" "$target" "$live_drive"
 }
 
 #------------------------------------------------------------------------------
@@ -2713,17 +2579,17 @@ check_target() {
 format_usb() {
     dev="/dev/${1#/dev/}"  type=$2  fstype=$3
 
-    msg $"formating device %s" "$(pq $dev)"
+    msg "formating device %s" "$(pq $dev)"
     local START=1  PART_NUM=0
 
     clear_partition "$dev"
 
     msg $"Using %s partitioning" $(pq $type)
 
-    local err_msg=$"Partitioning failed at %s"
+    local err_msg="Partitioning failed at %s"
 
     local PREAMB="parted --script --align optimal $dev unit MiB"
-    cmd $PREAMB mklabel $type || dmesg_fatal "$err_msg" partitioning
+    cmd $PREAMB mklabel $type || fatal "$err_msg" partitioning
 
     _add_partition $((TOTAL_SIZE - 1)) "$fstype" data
 
@@ -2737,7 +2603,7 @@ format_usb() {
 }
 
 #------------------------------------------------------------------------------
-# Create a file system on a partition
+#
 #------------------------------------------------------------------------------
 make_fs_dev() {
     local part=$1  fstype=$2  label=$3
@@ -2752,9 +2618,9 @@ make_fs_dev() {
               ntfs) args="--fast -L $label" ;;
     esac
 
-    msg $"Make %s filesystem" "$(pq $fstype)"
+    msg "Make %s filesystem" "$(pq $fstype)"
     cmd mkfs.$fstype $args $part \
-        || dmesg_fatal $"Could not make %s file system on %s" "$fstype" "$part"
+        || fatal "Could not make %s file system on %s" "$fstype" "$part"
 
     sync
     cmd partprobe $dev
@@ -2771,42 +2637,29 @@ makefs_menu() {
 }
 
 #------------------------------------------------------------------------------
-# Let user select a file system type if the current type is "choose"
-# Otherwise make sure we can make the specified file system type.
+#
 #------------------------------------------------------------------------------
 makefs_select() {
-    local var=$1  name=$2  val
+    local var=$1  val
     eval val=\$$var
-
-    [ -z "$val" ] && return
-
-    # In gui mode use fat32 instead of giving the user a menu
-    case $val in
-        choose) q_mode gui && val=vfat ;;
-    esac
-
-    # Only make a menu if "choose" is the fs_type, otherwise validate and return
-    case $val in
-        choose) ;;
-             *) validate_fs_type $val ; return ;;
-    esac
+    [ -n "$val" ] && return
 
     local menu=$(makefs_menu)
     local cnt=$(count_lines "$menu")
     case $cnt in
-        0) fatal $"No filesystem creation tools were found!"    ;;
-        1) warn  $"Only one filesystem creation tool was found" ;;
+        0) fatal "No filesystem creation tools were found!"    ;;
+        1) warn  "Only one filesystem creation tool was found" ;;
     esac
-    local title=$(printf $"Please select the %s filesystem type" "$(pqq $name)")
+    local title="Please select the filesystem type"
     my_select $var "$title" "$menu"
 }
 
 #------------------------------------------------------------------------------
 # Convenience routines to save a little typing
 #------------------------------------------------------------------------------
-encrypt()             {  [ "$ENCRYPT"   ]                 ;  return $?; }
-data_first()          {  [ "$DATA_FIRST_FS$DATA_FIRST" ]  ;  return $?; }
-using_grub_config_2() {  [ "$USING_GRUB_CONFIG_2" ]       ;  return $?; }
+encrypt()             {  [ "$ENCRYPT"   ];           return $?; }
+data_first()           {  [ "$DATA_FIRST" ];           return $?; }
+using_grub_config_2() {  [ "$USING_GRUB_CONFIG_2" ]; return $?; }
 
 #------------------------------------------------------------------------------
 # Make sure we have enough left over space on a partition.  Can generate
@@ -2885,68 +2738,65 @@ Umount_Dirs
 write_config() {
     local file=${1:-$CONFIG_FILE}
     local dir=$(dirname "$file")
-    mkdir -p "$dir" || fatal $"Could not make config file directory %s" "$dir"
-    msg $"Writing config file %s" "$(pq "$file")"
+    mkdir -p "$dir" || fatal "Could not make config file directory %s" "$dir"
+    msg "Writing config file %s" "$(pq "$file")"
 
     cat<<Config_File >"$file"
 $(config_header "$file" "$ME" "$VERSION" "$VERSION_DATE")
 
-#      ISO_FILE_DIR="$ISO_FILE_DIR"
-#     ISO_FILE_SPEC="$ISO_FILE_SPEC"
-#       SEARCH_DIRS="$SEARCH_DIRS"
-#      SEARCH_DEPTH="$SEARCH_DEPTH"
-#         MAX_FILES="$MAX_FILES"
-#      MIN_ISO_SIZE="$MIN_ISO_SIZE"
+     ISO_FILE_DIR="$ISO_FILE_DIR"
+    ISO_FILE_SPEC="$ISO_FILE_SPEC"
+      SEARCH_DIRS="$SEARCH_DIRS"
+     SEARCH_DEPTH="$SEARCH_DEPTH"
+        MAX_FILES="$MAX_FILES"
+     MIN_ISO_SIZE="$MIN_ISO_SIZE"
 
-#         MSDOS_GPT="$MSDOS_GPT"
-#      DEFAULT_SIZE="$DEFAULT_SIZE"
-#          CMD_SIZE="$CMD_SIZE"
-#         BIOS_SIZE="$BIOS_SIZE"
-#         UEFI_SIZE="$UEFI_SIZE"
-#       BIOS_MARGIN="$BIOS_MARGIN"
-#       MAIN_MARGIN="$MAIN_MARGIN"
-#       UEFI_MARGIN="$UEFI_MARGIN"
+        MSDOS_GPT="$MSDOS_GPT"
+     DEFAULT_SIZE="$DEFAULT_SIZE"
+         CMD_SIZE="$CMD_SIZE"
+        BIOS_SIZE="$BIOS_SIZE"
+        UEFI_SIZE="$UEFI_SIZE"
+      BIOS_MARGIN="$BIOS_MARGIN"
+      MAIN_MARGIN="$MAIN_MARGIN"
+      UEFI_MARGIN="$UEFI_MARGIN"
 
-#      EXT4_OPTIONS="$EXT4_OPTIONS"
-#        BIOS_LABEL="$BIOS_LABEL"
-#         ESP_LABEL="$ESP_LABEL"
+     EXT4_OPTIONS="$EXT4_OPTIONS"
+       BIOS_LABEL="$BIOS_LABEL"
+        ESP_LABEL="$ESP_LABEL"
 
-#           LIVE_MP="$LIVE_MP"
-#      LINUXFS_NAME="$LINUXFS_NAME"
-#  MIN_LINUXFS_SIZE="$MIN_LINUXFS_SIZE"
-#      DEF_BOOT_DIR="$DEF_BOOT_DIR"
+          LIVE_MP="$LIVE_MP"
+     LINUXFS_NAME="$LINUXFS_NAME"
+ MIN_LINUXFS_SIZE="$MIN_LINUXFS_SIZE"
+     DEF_BOOT_DIR="$DEF_BOOT_DIR"
 
-#        CLONE_DIRS="$CLONE_DIRS"
-#       CLONE_FILES="$CLONE_FILES"
-#  CLONE_BDIR_FILES="$CLONE_BDIR_FILES"
+       CLONE_DIRS="$CLONE_DIRS"
+      CLONE_FILES="$CLONE_FILES"
+ CLONE_BDIR_FILES="$CLONE_BDIR_FILES"
 
-#        UEFI_FILES="$UEFI_FILES"
-#      UEFI_2_FILES="$UEFI_2_FILES"
-#        BIOS_FILES="$BIOS_FILES"
+       UEFI_FILES="$UEFI_FILES"
+     UEFI_2_FILES="$UEFI_2_FILES"
+       BIOS_FILES="$BIOS_FILES"
 
-#         GRUB_CONF="$GRUB_CONF"
-#     EFI_GRUB_CONF="$EFI_GRUB_CONF"
-#      DID_EFI_FILE="$DID_EFI_FILE"
+        GRUB_CONF="$GRUB_CONF"
+           CHEATS=""
+     COLOR_SCHEME="$COLOR_SCHEME"
+    QUESTION_MODE="$QUESTION_MODE"
 
-#            CHEATS=""
-#      COLOR_SCHEME="$COLOR_SCHEME"
-#     QUESTION_MODE="$QUESTION_MODE"
+          ENCRYPT="$ENCRYPT"
+ PASS_PHRASE_TYPE="$PASS_PHRASE_TYPE"
+        LUKS_NAME="$LUKS_NAME"
 
-#           ENCRYPT="$ENCRYPT"
-#  PASS_PHRASE_TYPE="$PASS_PHRASE_TYPE"
-#         LUKS_NAME="$LUKS_NAME"
+EXT_OVERHEAD_FORM="$EXT_OVERHEAD_FORM"
+ EXT_OVERHEAD_MAX="$EXT_OVERHEAD_MAX"
 
-# EXT_OVERHEAD_FORM="$EXT_OVERHEAD_FORM"
-#  EXT_OVERHEAD_MAX="$EXT_OVERHEAD_MAX"
+  PP_MAX_WORD_LEN="$PP_MAX_WORD_LEN"
+     PP_NUM_WORDS="$PP_NUM_WORDS"
+    PP_WORDS_FILE="$PP_WORDS_FILE"
+   PP_RAND_SOURCE="$PP_RAND_SOURCE"
 
-#   PP_MAX_WORD_LEN="$PP_MAX_WORD_LEN"
-#      PP_NUM_WORDS="$PP_NUM_WORDS"
-#     PP_WORDS_FILE="$PP_WORDS_FILE"
-#    PP_RAND_SOURCE="$PP_RAND_SOURCE"
+  GRAPHICAL_MENUS="$GRAPHICAL_MENUS"
+  AUTOMOUNT_DELAY="$AUTOMOUNT_DELAY"
 
-#   GRAPHICAL_MENUS="$GRAPHICAL_MENUS"
-#   AUTOMOUNT_DELAY="$AUTOMOUNT_DELAY"
-#   INITRD_MAX_SIZE="$INITRD_MAX_SIZE"
 $(config_footer)
 Config_File
 
@@ -2997,7 +2847,7 @@ load_lib() {
         return 0
     done
 
-    printf "Could not find library %s on path %s\n" "$file" "$path" >&2
+    printf "Could not find library '%s' on path '%s'\n" "$file" "$path" >&2
     printf "This is a fatal error\n" >&2
     exit 17
 }
