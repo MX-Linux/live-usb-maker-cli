@@ -8,8 +8,13 @@
 # License: GPLv3 or later
 #==============================================================================
 
+<<<<<<< HEAD
       VERSION="2.41.07"
  VERSION_DATE="Thu 10 Oct 2019 11:20:26 PM MDT"
+=======
+      VERSION="2.41.09"
+ VERSION_DATE="Fri 18 Oct 2019 01:27:21 AM MDT"
+>>>>>>> upstream/master
 
         ME=${0##*/}
     MY_DIR=$(dirname "$(readlink -f $0)")
@@ -107,7 +112,11 @@ ORDERED_CMDS="$ORDERED_CMDS copy-main check-usb-md5 copy-bios copy-uefi uuids"
 ORDERED_CMDS="$ORDERED_CMDS cheats cheats-syslinux cheats-grub install encrypt-main encryption-initrd"
     ALL_CMDS="sizes all partition makefs copy cheats $ORDERED_CMDS"
 
+<<<<<<< HEAD
    ALL_FORCE="automount,flock,makefs,ultra-fit,usb,nofuse,fuse,uuids,nomd5,debug-copy,check-sh"
+=======
+   ALL_FORCE="automount,flock,makefs,ultra-fit,usb,nofuse,fuse,uuids,nomd5,debug-copy,check-sh,luks2"
+>>>>>>> upstream/master
    ALL_PAUSE="exit,initrd,copy,uuids"
 
     LIB_PATH="$MY_LIB_DIR:$LIB_DIR"
@@ -123,6 +132,7 @@ SYSLINUX_FILES="$SYSLINUX_FILES libmenu.c32 libutil.c32 linux.c32 menu.c32"
 
         SWEARS="asshole|bastard|bitch|cock|crap|cunt|damn|dick|douche|fag|fuck|piss|pussy|shit|slut"
 
+     LUKS_TYPE="luks1"
 
 #------------------------------------------------------------------------------
 # Show usage and exit
@@ -737,6 +747,21 @@ main() {
         local linuxfs_full=$ISO_DIR/$DEF_BOOT_DIR/$LINUXFS_NAME
         my_mount "$linuxfs_full" "$LINUX_DIR" -t squashfs -o loop,ro
 
+        if force luks2; then
+
+            local host_cs=$(cryptsetup --version | cryptsetup_major_version)
+            local targ_cs=$(chroot $LINUX_DIR /sbin/cryptsetup --version | cryptsetup_major_version)
+            : ${host_cs:=0}
+            : ${targ_cs:=0}
+            msg "Host using cryptsetup version %s" "$(pq $host_cs.x)"
+            msg "Target using cryptsetup version %s" "$(pq $targ_cs.x)"
+            if [ $host_cs -ge 2 -a $targ_cs -ge 2 ]; then
+                LUKS_TYPE="luks2"
+                msg "Using Luks version %s" "$(nq $LUKS_TYPE)"
+            else
+                msg "Leaving Luks version at %s" "$(nq $LUKS_TYPE)"
+            fi
+        fi
         local initrd_file=$ISO_DIR/$DEF_BOOT_DIR/initrd.gz
         start_initrd_encryption "$initrd_file" "$INITRD_DIR" "$LINUX_DIR"
         pause initrd
@@ -775,6 +800,8 @@ main() {
 
     local ready_str=$"Ready to perform %s action on %s"
     [ -z "${CMDS##* *}" ] && ready_str=$"Ready to perform %s actions on %s"
+
+
 
     [ "$CMDS" != 'all' ] \
         && final_q=$(printf "$ready_str" "$(pq $CMDS)" "$(pqq ${target_dev##*/})")
@@ -848,6 +875,8 @@ main() {
         esac
 
         encrypt_partition $MAIN_DEV "$LUKS_NAME" "$phrase"
+        check_luks_version "$MAIN_DEV"
+
         need makefs-main && do_makefs_ext "$LUKS_DEV" "$EXT4_OPTIONS" "$BIOS_LABEL"
 
         local main_uuid=$(lsblk --nodeps -no uuid $MAIN_DEV)
@@ -1203,6 +1232,30 @@ dict_words() {
 }
 
 #------------------------------------------------------------------------------
+# Get just the major version number from cryptsetup --version output
+#------------------------------------------------------------------------------
+cryptsetup_major_version() { sed -nr "s/^[a-z]+\s+([0-9]+)\..*/\1/p";  }
+
+#------------------------------------------------------------------------------
+#
+#------------------------------------------------------------------------------
+check_luks_version() {
+    local part=$(expand_device "$1")
+    if ! test -b "$part"; then
+        warn "Encrypted partition %s is not a block device" "$(pqw $part)"
+        return 1
+    fi
+    local luks=$(echo $(dd status=none if=$part bs=1 count=4 | od -An -t x4 --endian=big))
+    if [ "$luks" != '4c554b53' ]; then
+        warn "%s does not look like a Luks partition.  Found %s" "$(pqw $part)" "$(pqw $luks)"
+        return 2
+    fi
+    local type=$(echo $(dd status=none if=$part bs=1 skip=6 count=2 | od -An -t x2 --endian=big))
+    msg "Luks type  %s" "$(nq $(printf "%d" "0x$type"))"
+    return 0
+}
+
+#------------------------------------------------------------------------------
 # Pretty much WYSIWYG
 #------------------------------------------------------------------------------
 overall_mode_menu() {
@@ -1490,7 +1543,7 @@ guess_partitioning() {
     case $fs_str in
                    ext4:vfat:*)                                             ;;
                  *:ext4:vfat:*) DATA_FIRST=true ; DATA_FIRST_FS=$fs1        ;;
-        ext4:cryto_LUKS:vfat:*) ENCRYPT=true    ; CRYPT_PART=$part2         ;;
+       ext4:crypto_LUKS:vfat:*) ENCRYPT=true    ; CRYPT_PART=$part2         ;;
        *:ext4:crypto_LUKS:vfat) ENCRYPT=true    ; CRYPT_PART=$part3
                                 DATA_FIRST=true ; DATA_FIRST_FS=$fs1        ;;
             # This does not look like a live-usb device <device signature>
@@ -1594,8 +1647,10 @@ write_phrase_file() {
 #------------------------------------------------------------------------------
 remount_encrypted() {
     local dev=$1  name=$2
-    echo "dev=$dev  name=$name"
-    cryptsetup open --type luks "$dev" "$name" \
+    #echo "dev=$dev  name=$name"
+
+    cmd mkdir -p /run/cryptsetup
+    cryptsetup open "$dev" "$name" \
         || fatal $"Could not remount encrypted partition %s" "$(pqw $dev)"
 
     LUKS_DEV=/dev/mapper/$name
@@ -1611,18 +1666,20 @@ encrypt_partition() {
 
     msg $"About to encrypt device %s" "$(pq $dev)"
 
+    cmd mkdir -p /run/cryptsetup
+
     local val=${phrase#*=}  ret
     if [ -z "$PRETEND_MODE" ]; then
         case $phrase in
                 ask) shout
                      shout $"We want to overwrite the data on %s" $dev
                      shout $"Type in upper-case %s as suggested" "'YES'"
-                     cryptsetup luksFormat              $dev ; ret=$?
+                     cryptsetup luksFormat --type $LUKS_TYPE $dev ; ret=$?
                      shout $"You will be asked for the passphrase a third time" ;;
 
-             file=*) cat "$val"     | cryptsetup luksFormat --key-file - $dev ; ret=$? ;;
+             file=*) cat "$val"     | cryptsetup luksFormat --type $LUKS_TYPE --key-file - $dev ; ret=$? ;;
 
-           phrase=*) echo -n "$val" | cryptsetup luksFormat --key-file - $dev ; ret=$? ;;
+           phrase=*) echo -n "$val" | cryptsetup luksFormat --type $LUKS_TYPE --key-file - $dev ; ret=$? ;;
 
                   *) internal_error phrase-type "$phrase"
         esac
@@ -1631,13 +1688,13 @@ encrypt_partition() {
     fi
 
     case $phrase in
-           ask) cryptsetup open --type luks                   $dev $name; ret=$? ;;
-        file=*) cryptsetup open --type luks --key-file "$val" $dev $name; ret=$? ;;
+           ask) cryptsetup open --type $LUKS_TYPE $dev $name; ret=$? ;;
+        file=*) cryptsetup open --type $LUKS_TYPE --key-file "$val" $dev $name; ret=$? ;;
 
       phrase=*) if YES_no $"Do you want to try entering the new passphrase now?"; then
-                    cryptsetup open --type luks $dev $name; ret=$?
+                    cryptsetup open --type $LUKS_TYPE $dev $name; ret=$?
                 else
-                    echo -n "$val" | cryptsetup open --type luks --key-file - $dev $name; ret=$?
+                    echo -n "$val" | cryptsetup open --type $LUKS_TYPE --key-file - $dev $name; ret=$?
                 fi ;;
     esac
 
@@ -1858,6 +1915,10 @@ validate_data_first() {
         esac
     done
 
+    case $DATA_FIRST_FS in
+        fat32) DATA_FIRST_FS=vfat ;;
+    esac
+
     : ${DATA_FIRST_FS:=choose}
 
     # Validate the size (we already stripped off the "%"
@@ -1971,10 +2032,13 @@ do_partition() {
 
     if [ $bios_size -gt 0 ]; then
         _add_partition $bios_size bios
+        cmd $PREAMB set $PART_NUM $boot_flag on || dmesg_fatal "$err_msg" boot-flag-1
         main_fs=
     fi
     _add_partition "$main_size" $main_fs  main
-    cmd $PREAMB set $PART_NUM $boot_flag on || dmesg_fatal "$err_msg" boot-flag
+    if ! encrypt; then
+        cmd $PREAMB set $PART_NUM $boot_flag on || dmesg_fatal "$err_msg" boot-flag-2
+    fi
     _add_partition "$uefi_size" fat32  uefi
     cmd $PREAMB set $PART_NUM esp on || dmesg_fatal "$err_msg" esp-flag
 
@@ -2682,6 +2746,10 @@ update_initrd() {
 check_recent_executables() {
     local dir=$1  file  bash_error  cnt=0
     while read file; do
+<<<<<<< HEAD
+=======
+        test -e "$file" || continue
+>>>>>>> upstream/master
         head -n1 "$file" | egrep -q "^#\!(/live)?/bin/[a-z]*sh" || continue
         cnt=$((cnt + 1))
         bash -n "$file" && continue
