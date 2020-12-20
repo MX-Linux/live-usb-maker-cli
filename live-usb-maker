@@ -8,8 +8,8 @@
 # License: GPLv3 or later
 #==============================================================================
 
-      VERSION="2.41.17"
- VERSION_DATE="Thu 12 Dec 2019 01:59:33 AM MST"
+      VERSION="2.41.18"
+ VERSION_DATE="Sat Dec 19 02:26:36 PM MST 2020"
 
         ME=${0##*/}
     MY_DIR=$(dirname "$(readlink -f $0)")
@@ -2337,7 +2337,7 @@ start_initrd_encryption() {
         test -d $linux_dir/lib/modules/$kernel/kernel || continue
 
         msg $"add %s modules to initrd" "$(pq $kernel encryption)"
-        cmd copy-initrd-modules --quiet --only-encrypt --from=$linux_dir --to=$initrd_dir \
+        cmd copy-initrd-modules --quiet --only-encrypt --from=$linux_dir --to=$initrd_dir --kernel=$kernel \
             || fatal "Kernel modules were not copied.  Do you need to update copy-initrd-modules?"
 
     done
@@ -2366,7 +2366,7 @@ disable_initrd_encryption() {
         test -d $linux_dir/lib/modules/$kernel/kernel || continue
 
         msg $"add %s modules to initrd" "$(pq $kernel)"
-        cmd copy-initrd-modules --quiet --from=$linux_dir --to=$initrd_dir \
+        cmd copy-initrd-modules --quiet --from=$linux_dir --to=$initrd_dir --kernel=$kernel \
             || fatal "Kernel modules were not copied.  Do you need to update copy-initrd-modules?"
 
     done
@@ -2819,7 +2819,7 @@ update_initrd() {
 
     cmd copy-initrd-modules --count --quiet --from=$linux_dir --to=$initrd_dir --kernel=$kernel
 
-    cmd copy-initrd-modules --quiet --only-encrypt --from=$linux_dir --to=$initrd_dir $e_args \
+    cmd copy-initrd-modules --quiet --only-encrypt --from=$linux_dir --to=$initrd_dir $e_args --kernel=$kernel \
             || fatal "Kernel modules were not copied.  Do you need to update copy-initrd-modules?"
 
     pause initrd

@@ -1,3 +1,10 @@
+live-usb-maker (0.4.8) unstable; urgency=medium
+
+  * EXT4_OPTIONS= -m0 -i16384 rather than 100000
+  * different kernels bugfix
+
+ -- anticapitalista <antix@operamail.com>  Sat, 19 Dec 2020 17:58:00 +0200
+
 live-usb-maker (0.4.7) unstable; urgency=medium
 
   * fix the fix to --label bug
