@@ -1,3 +1,9 @@
+live-usb-maker (0.4.9) unstable; urgency=medium
+
+  * Fix parted parsing for non-english locale - thanks graybatonrandomstuff
+
+ -- anticapitalista <antix@operamail.com>  Thu, 10 Nov 2022 16:06:33 +0200
+
 live-usb-maker (0.4.8) unstable; urgency=medium
 
   * EXT4_OPTIONS= -m0 -i16384 rather than 100000
