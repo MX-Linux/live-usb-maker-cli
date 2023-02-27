@@ -1,3 +1,15 @@
+live-usb-maker (0.4.11) unstable; urgency=medium
+
+  * Build debs for all antiX flavours - man thanks to Peter Sagi for the encrytion fix
+
+ -- anticapitalista <antix@operamail.com>  Mon, 13 Feb 2023 14:01:59 +0200
+
+live-usb-maker (0.4.10) unstable; urgency=medium
+
+  * FIX: cloning live system encrypted
+
+ -- Peter Sagi <peter.sagi.s@gmail.com>  Sun Oct  9 19:37:08 CEST 2022
+
 live-usb-maker (0.4.9) unstable; urgency=medium
 
   * Fix parted parsing for non-english locale - thanks graybatonrandomstuff
