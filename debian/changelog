@@ -1,3 +1,10 @@
+live-usb-maker (0.4.12) unstable; urgency=medium
+
+  * Copy initrd_release if exists
+  * Clone additional kernel and initrd if exists
+
+ -- fehlix <fehlix@mxlinux.org>  Sat, 25 Feb 2023 12:45:10 -0500
+
 live-usb-maker (0.4.11) unstable; urgency=medium
 
   * Build debs for all antiX flavours - man thanks to Peter Sagi for the encrytion fix
