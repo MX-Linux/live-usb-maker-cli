@@ -1,4 +1,4 @@
-live-usb-maker (2.41.24) UNRELEASED; urgency=medium
+live-usb-maker (2.41.24) mx; urgency=medium
 
   * add --grub-mbr switch to force grub2 usage for mbr/legacy boots
   * replaces syslinux boot change 
