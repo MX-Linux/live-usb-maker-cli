@@ -132,7 +132,7 @@ SYSLINUX_FILES="$SYSLINUX_FILES libmenu.c32 libutil.c32 linux.c32 menu.c32"
 
      LUKS_TYPE="luks2"
 
-
+    DO_EXTLINUX=true
     GRUB_MBR="false"
 
 #------------------------------------------------------------------------------
@@ -213,7 +213,7 @@ Options:
   -g --gpt                    Use gpt partitioning instead of msdos
   -G --graphic-ui             Use the new graphics user interface (default)
      --gpt-pmbr               Set pmbr_boot disk flag (prevents booting via UEFI)
-     --grub-mbr               Use grub for legacy boot (instead of syslinux)
+     --grub-mbr               Use grub for default legacy boot
   -h --help                   Show this usage
   -i --initrd=<file>          Update the initrd from using a template-initrd.gz
   -i --initrd=<dir>           Use a directory tree as a template
@@ -225,6 +225,7 @@ Options:
      --no-clone-persist       Don't clone persistence files even if they exist
      --no-clone-persist=<p>   Or pass a parameter: h,home: don't clone home
                                                    r,root: don't clone root
+    --no-extlinux             Do not install syslinux/isolinux (imples --grub-mbr)
   -N --numeric-ui             Use the legacy numerical user interface
      --pause                  Wait for user input before exit
      --pause=initrd           Pause after unpacking the initrd.gz file
@@ -309,6 +310,7 @@ eval_argument() {
              -label|L)  CMD_LABEL=$val                   ;;
              -label=*)  CMD_LABEL=$val                   ;;
              -msdos|m)  MSDOS_GPT="msdos"                ;;
+        -no-extlinux)   DO_EXTLINUX=false; GRUB_MBR=true ;;
        -no-prog-bar|n)  NO_PROGRESS_BAR=true             ;;
     -no-clone-persist)  NO_CLONE_PERSIST=home,root       ;;
   -no-clone-persist=*)  NO_CLONE_PERSIST=$val            ;;
@@ -472,7 +474,9 @@ main() {
     # Always write a new config file and then exit if requested
     [ "$WRITE_CONFIG" ] && write_config "$CONFIG_FILE" && exit 0
 
-    need_prog extlinux
+    if [ "$DO_EXTLINUX" = "true" ]; then
+        need_prog extlinux
+    fi
     q_mode gui && PROGRESS=true
     [ "$PROGRESS" ] && PROG_FILE=$THE_PROG_FILE
 
@@ -2718,15 +2722,16 @@ random_string() {
 do_install_bootloader() {
     local dev=$1 bios_dev=$2  bios_dir=$3  type=$4 type iso_dir=$5
 
+if [ "$DO_EXTLINUX" = "true" ]; then
     msg "extlinux version %s" "$(pq $(get_extlinux_version))"
 
     local fname
     case $type in
-          gpt) fname=gptmbr.bin ;;
+        gpt) fname=gptmbr.bin ;;
         msdos) fname=mbr.bin
-               data_first && fname=altmbr.bin  ;;
+            data_first && fname=altmbr.bin  ;;
             *) fatal "Unknown partitioning scheme: %s.  Expected msdos or gpt" "$type"
-               ;;
+            ;;
     esac
 
     local dir file d
@@ -2741,7 +2746,7 @@ do_install_bootloader() {
         altmbr.bin) printf '\2' | cat "$file" - \
             | cmd_dd bs=440 count=1 iflag=fullblock conv=notrunc of=$dev ;;
 
-                 *) cmd_dd bs=440 conv=notrunc count=1 if=$file of=$dev  ;;
+                *) cmd_dd bs=440 conv=notrunc count=1 if=$file of=$dev  ;;
     esac
 
     local sdir idir syslinux_dir isolinux_dir
@@ -2771,10 +2776,11 @@ do_install_bootloader() {
 
     [ "$PRETEND_MODE" ] && return
 
-     # [don't translate syslinux or isolinux]
+    # [don't translate syslinux or isolinux]
     [ -z "$syslinux_dir" ] && fatal "Could not find a syslinux or isolinux directory"
 
     cmd extlinux -i --device="$bios_dev" $syslinux_dir || fatal "%s command failed" extlinux
+fi
 
     if [ "$GRUB_MBR" = "true" ]; then
         do_install_bootloader_grub "$dev" "$bios_dir" "$type" "$iso_dir"
@@ -2846,9 +2852,14 @@ do_install_bootloader_grub() {
         fi
     fi
 
-    if [ -f "$bios_dir/boot/grub/i386-pc/lnxboot.img" ]; then
-       # re-enable syslinux menus
-       sed -i -r 's/^([#[:space:]]+)(switch_to_syslinux)/\2/' "$bios_dir/boot/grub/config/bootmenu.cfg"
+    if [ "$DO_EXTLINUX" = "true" ]; then
+        if [ -f "$bios_dir/boot/grub/i386-pc/lnxboot.img" ]; then
+           # re-enable syslinux menus
+           sed -i -r 's/^([#[:space:]]+)(switch_to_syslinux)/\2/' "$bios_dir/boot/grub/config/bootmenu.cfg"
+        else
+            #comment out syslinux menus
+            sed -i '/^[^#]*switch_to_syslinux/s/^/#/' "$bios_dir/boot/grub/config/bootmenu.cfg"
+        fi
     else
        #comment out syslinux menus
        sed -i '/^[^#]*switch_to_syslinux/s/^/#/' "$bios_dir/boot/grub/config/bootmenu.cfg"
